@@ -1,0 +1,4 @@
+name = "filterSQP"
+uuid = "f1ca9057-ba27-4701-aaf7-0436ee83bb57"
+authors = ["Kibaek Kim <kibaek.k@gmail.com>"]
+version = "0.1.0"
