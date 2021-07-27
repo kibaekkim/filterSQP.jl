@@ -4,7 +4,7 @@ Base.@kwdef mutable struct Parameters
     mlp::Int = 1000      # max. level for resolving degeneracy in QP
     mxwk::Int = 2000000  # length of *real* workspace
     mxiwk::Int = 500000  # length of *integer* workspace
-    iprint::Int = 5      # print flag: 0 = quiet (no printing)
+    iprint::Int = 1      # print flag: 0 = quiet (no printing)
                          #             1 = one line per iteration
                          #             2 = scalar information printed
                          #             3 = scalar & vector information printed
