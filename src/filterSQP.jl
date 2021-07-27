@@ -95,6 +95,8 @@ mutable struct FilterSqpProblem
         nprof = 20*n
         par.mxwk = (16*n + 8*m + par.mlp + 8*par.maxf + par.kmax*(par.kmax+9)/2 + 5*n + nprof) * 2
         par.mxiwk = (4*n + 3*m + par.mlp + 100 + par.kmax + 9*n + m) * 2
+        ws = zeros(Float64, par.mxwk)
+        lws = zeros(Float64, par.mxiwk)
 
         prob = new(
             n,
@@ -110,8 +112,8 @@ mutable struct FilterSqpProblem
             ones(Float64, n),               # s
             zeros(Float64, n+nele_jac),     # a
             zeros(Float64, n+nele_jac+m+3), # la
-            zeros(Float64, nele_hess),      # ws: should the size better be mxwk?
-            zeros(Int32, 1 + 2* nele_hess), # lws: should the size better be mxiwk?
+            ws,                             # ws: should the size better be mxwk?
+            lws,                            # lws: should the size better be mxiwk?
             zeros(Float64, n+m),            # lam
             cstype,                         # cstype
             zeros(Int32, 14),               # istat
@@ -165,18 +167,19 @@ function objfun_wrapper(
     f_ptr::Ptr{Cdouble}, 
     user::Ptr{Cdouble}, 
     iuser::Ptr{Cint}, 
+    userdata::Ptr{Cvoid},
     errflag::Ptr{Cint}
 )
-    println(">>>> objfun_wrapper ")
+    # println(">>>> objfun_wrapper ")
     unsafe_store!(errflag, 1)
-    prob = unsafe_pointer_to_objref(user)::FilterSqpProblem
+    prob = unsafe_pointer_to_objref(userdata)::FilterSqpProblem
     n = unsafe_load(n_ptr)
     x = unsafe_wrap(Array, x_ptr, Int(n))
     f = convert(Float64, prob.eval_f(x))::Float64
-    @show n, x, f
+    # @show n, x, f
     unsafe_store!(f_ptr, f)
     unsafe_store!(errflag, 0)
-    println("<<<< objfun_wrapper ")
+    # println("<<<< objfun_wrapper ")
     return
 end
 
@@ -189,19 +192,25 @@ function confun_wrapper(
     la_ptr::Ptr{Cint}, 
     user::Ptr{Cdouble}, 
     iuser::Ptr{Cint}, 
+    userdata::Ptr{Cvoid},
     errflag::Ptr{Cint}
 )
-    println(">>>> confun_wrapper ")
+    # println(">>>> confun_wrapper ")
     unsafe_store!(errflag, 1)
-    prob = unsafe_pointer_to_objref(user)::FilterSqpProblem
+    prob = unsafe_pointer_to_objref(userdata)::FilterSqpProblem
     n = unsafe_load(n_ptr)
     m = unsafe_load(m_ptr)
     x = unsafe_wrap(Array, x_ptr, Int(n))
     c = unsafe_wrap(Array, c_ptr, Int(m))
+    # carr = Vector{Float64}(undef, m)
+    # prob.eval_g(x, carr)
+    # for i = 1:m
+    #     c[i] = carr[i]
+    # end
     prob.eval_g(x, c)
-    @show n, m, x, c
+    # @show n, m, x, c
     unsafe_store!(errflag, 0)
-    println("<<<< confun_wrapper ")
+    # println("<<<< confun_wrapper ")
     return
 end
 
@@ -215,38 +224,39 @@ function gradient_wrapper(
     maxa_ptr::Ptr{Cint}, 
     user::Ptr{Cdouble}, 
     iuser::Ptr{Cint}, 
+    userdata::Ptr{Cvoid},
     errflag::Ptr{Cint}
 )
-    println(">>>> gradient_wrapper ")
+    # println(">>>> gradient_wrapper ")
     unsafe_store!(errflag, 1)
-    prob = unsafe_pointer_to_objref(user)::FilterSqpProblem
+    prob = unsafe_pointer_to_objref(userdata)::FilterSqpProblem
     n = unsafe_load(n_ptr)
     m = unsafe_load(m_ptr)
     maxa = unsafe_load(maxa_ptr)
-    @show maxa
+    # @show maxa
 
     x = unsafe_wrap(Array, x_ptr, n)
     a = unsafe_wrap(Array, a_ptr, maxa)
     la = unsafe_wrap(Array, la_ptr, 1 + maxa + m + 2)
-    @show n, m, x
+    # @show n, m, x
 
     prob.eval_grad_f(x, prob.grad_f)
     prob.eval_jac_g(x, :Structure, prob.rows_jac, prob.cols_jac, prob.values_jac) # FIXME: why should I get this info again?
     prob.eval_jac_g(x, :Values, prob.rows_jac, prob.cols_jac, prob.values_jac)
-    @show prob.nele_jac
-    @show prob.rows_jac 
-    @show prob.cols_jac 
-    @show prob.values_jac 
+    # @show prob.nele_jac
+    # @show prob.rows_jac 
+    # @show prob.cols_jac 
+    # @show prob.values_jac 
 
-    @show prob.grad_f
-    @show sparse(prob.rows_jac, prob.cols_jac, prob.values_jac, m, n)
+    # @show prob.grad_f
+    # @show sparse(prob.rows_jac, prob.cols_jac, prob.values_jac, m, n)
     A = sparse(
         [prob.cols_jac; 1:n], 
         [prob.rows_jac .+ 1; ones(n)], 
         [prob.values_jac; prob.grad_f], 
         n, m+1)
     # dropzeros!(A)
-    @show A
+    # @show A
     
     nnza = length(A.nzval)
     pjp = nnza + 1
@@ -259,11 +269,11 @@ function gradient_wrapper(
     for i = 1:(A.n+1)
         la[pjp+i] = A.colptr[i]
     end
-    @show a
-    @show la
+    # @show a
+    # @show la
     unsafe_store!(mxa_ptr, nnza)
     unsafe_store!(errflag, 0)
-    println("<<<< gradient_wrapper ")
+    # println("<<<< gradient_wrapper ")
 
     return
 end
@@ -278,14 +288,15 @@ function hessian_wrapper(
     lws_ptr::Ptr{Cint}, 
     user::Ptr{Cdouble}, 
     iuser::Ptr{Cint}, 
+    userdata::Ptr{Cvoid},
     l_hess::Ptr{Cint},  # On entry: max. space allowed for Hessian storage in ws.  On exit: actual amount of Hessian storage used in ws
     li_hess::Ptr{Cint}, # On entry: max. space allowed for Hessian storage in lws. On exit: actual amount of Hessian storage used in lws
     errflag::Ptr{Cint}
 )
 
-    println(">>>> hessian_wrapper ")
+    # println(">>>> hessian_wrapper ")
     unsafe_store!(errflag, 1)
-    prob = unsafe_pointer_to_objref(user)::FilterSqpProblem
+    prob = unsafe_pointer_to_objref(userdata)::FilterSqpProblem
     if prob.eval_h === nothing  # Did the user specify a Hessian?
         return
     end
@@ -296,11 +307,11 @@ function hessian_wrapper(
 
     x = unsafe_wrap(Array, x_ptr, n)
     lam = unsafe_wrap(Array, lam_ptr, n+m)
-    ws = unsafe_wrap(Array, ws_ptr, prob.nele_hess)
-    lws = unsafe_wrap(Array, lws_ptr, 1 + 2 * prob.nele_hess)
-    @show x
-    @show lam
-    @show prob.nele_hess
+    ws = unsafe_wrap(Array, ws_ptr, prob.par.mxwk)
+    lws = unsafe_wrap(Array, lws_ptr, prob.par.mxiwk)
+    # @show x
+    # @show lam
+    # @show prob.nele_hess
     nnzH = 0
 
     if prob.nele_hess > 0
@@ -309,47 +320,39 @@ function hessian_wrapper(
         prob.eval_h(x, :Values, prob.rows_hess, prob.cols_hess, obj_factor, lam, prob.values_hess)
 
         H = sparse(prob.rows_hess, prob.cols_hess, prob.values_hess, n, n)
-        # for j = 1:n, i = (H.colptr[j]):(H.colptr[j+1]-1)
-        #     if j < H.rowval[i]
-        #         H.nzval[i] = 0.0
-        #     end
-        # end
+        for j = 1:n, i = (H.colptr[j]):(H.colptr[j+1]-1)
+            if j < H.rowval[i]
+                H.nzval[i] = 0.0
+            end
+        end
         dropzeros!(H)
         nnzH = length(H.nzval)
-
-        @show prob.rows_hess
-        @show prob.cols_hess
-        @show prob.values_hess
         @show H
+        # @show prob.rows_hess
+        # @show prob.cols_hess
+        # @show prob.values_hess
 
         # store indices and values of Hessian
         if nnzH > 0
-            for j = 1:n
-                for i = (H.colptr[j]):(H.colptr[j+1]-1)
-                    if j < H.rowval[i]
-                        break
-                    end
-                    lws[i] = H.rowval[i]
-                    lws[nnzH+i] = j
-                    ws[i] = H.nzval[i]
+            for j = 1:n, i = (H.colptr[j]):(H.colptr[j+1]-1)
+                if j < H.rowval[i]
+                    break
                 end
+                lws[i] = H.rowval[i]
+                lws[nnzH+i] = j
+                ws[i] = H.nzval[i]
             end
         end
-        # for i = 1:nnzH
-        #     lws[i] = prob.rows_hess[i]
-        #     lws[prob.nele_hess+i] = prob.cols_hess[i]
-        #     ws[i] = prob.values_hess[i]
-        # end
     end
 
     # save number of Hessian entries
     lws[1] = nnzH
 
     # set storage requirements for Hessian
-    unsafe_store!(l_hess, Int(lws[1]))
-    unsafe_store!(li_hess, Int(1 + 2 * lws[1]))
+    unsafe_store!(l_hess, lws[1])
+    unsafe_store!(li_hess, 1 + 2 * lws[1])
     unsafe_store!(errflag, 0)
-    println("<<<< hessian_wrapper ")
+    # println("<<<< hessian_wrapper ")
     return
 end
 
@@ -376,9 +379,9 @@ function createProblem(
     @assert n == length(x_L) == length(x_U)
     @assert m == length(g_L) == length(g_U)
 
-    @show n, m
-    @show cstype
-    @show nele_jac, nele_hess
+    # @show n, m
+    # @show cstype
+    # @show nele_jac, nele_hess
 
     return FilterSqpProblem(
         n,
@@ -406,22 +409,22 @@ function solveProblem(prob::FilterSqpProblem)
     objfun_cb = @cfunction(
         objfun_wrapper,
         Cvoid,
-        (Ptr{Cdouble}, Ptr{Cint}, Ptr{Cdouble}, Ptr{Cdouble}, Ptr{Cint}, Ptr{Cint})
+        (Ptr{Cdouble}, Ptr{Cint}, Ptr{Cdouble}, Ptr{Cdouble}, Ptr{Cint}, Ptr{Cvoid}, Ptr{Cint})
     )
     confun_cb = @cfunction(
         confun_wrapper,
         Cvoid,
-        (Ptr{Cdouble}, Ptr{Cint}, Ptr{Cint}, Ptr{Cdouble}, Ptr{Cdouble}, Ptr{Cint}, Ptr{Cdouble}, Ptr{Cint}, Ptr{Cint})
+        (Ptr{Cdouble}, Ptr{Cint}, Ptr{Cint}, Ptr{Cdouble}, Ptr{Cdouble}, Ptr{Cint}, Ptr{Cdouble}, Ptr{Cint}, Ptr{Cvoid}, Ptr{Cint})
     )
     gradient_cb = @cfunction(
         gradient_wrapper,
         Cvoid,
-        (Ptr{Cint}, Ptr{Cint}, Ptr{Cint}, Ptr{Cdouble}, Ptr{Cdouble}, Ptr{Cint}, Ptr{Cint}, Ptr{Cdouble}, Ptr{Cint}, Ptr{Cint})
+        (Ptr{Cint}, Ptr{Cint}, Ptr{Cint}, Ptr{Cdouble}, Ptr{Cdouble}, Ptr{Cint}, Ptr{Cint}, Ptr{Cdouble}, Ptr{Cint}, Ptr{Cvoid}, Ptr{Cint})
     )
     hessian_cb = @cfunction(
         hessian_wrapper,
         Cvoid,
-        (Ptr{Cdouble}, Ptr{Cint}, Ptr{Cint}, Ptr{Cint}, Ptr{Cdouble}, Ptr{Cdouble}, Ptr{Cint}, Ptr{Cdouble}, Ptr{Cint}, Ptr{Cint}, Ptr{Cint}, Ptr{Cint})
+        (Ptr{Cdouble}, Ptr{Cint}, Ptr{Cint}, Ptr{Cint}, Ptr{Cdouble}, Ptr{Cdouble}, Ptr{Cint}, Ptr{Cdouble}, Ptr{Cint}, Ptr{Cvoid}, Ptr{Cint}, Ptr{Cint}, Ptr{Cint})
     )
 
     objval = Ref{Cdouble}(prob.f)
@@ -456,8 +459,9 @@ function solveProblem(prob::FilterSqpProblem)
             Ptr{Cint}, # lws
             Ptr{Cdouble}, # lam
             Ptr{UInt8}, # cstype
-            Any, # user
+            Ptr{Cdouble}, # user
             Ptr{Cint}, # iuser
+            Any, # userdata
             Cint, # maxiter
             Ptr{Cint}, # istat
             Ptr{Cdouble}, # rstat
@@ -491,8 +495,9 @@ function solveProblem(prob::FilterSqpProblem)
         prob.lws,
         prob.lam,
         prob.cstype,
-        prob,
+        [], # user
         [], # iuser
+        prob,
         prob.par.max_iter,
         prob.istat,
         prob.rstat,
@@ -508,6 +513,17 @@ function solveProblem(prob::FilterSqpProblem)
     @show prob.ifail
     @show prob.status
     @show prob.f
+
+    for j = 1:prob.n
+        @show prob.x[j], prob.blo[j], prob.bup[j], prob.lam[j]
+        prob.mult_x_L[j] = prob.lam[j]
+        prob.mult_x_U[j] = prob.lam[j]
+    end
+    for i = 1:prob.m
+        @show prob.blo[prob.n+i], prob.bup[prob.n+i], prob.lam[prob.n+i]
+        prob.mult_g[i] = prob.lam[prob.n+i]
+    end
+
     return prob.status
 end
 
