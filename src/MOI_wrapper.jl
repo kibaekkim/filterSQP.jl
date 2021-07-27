@@ -1551,6 +1551,8 @@ function MOI.optimize!(model::Optimizer)
     jacobian_sparsity = jacobian_structure(model)
     hessian_sparsity = has_hessian ? hessian_lagrangian_structure(model) : []
 
+    obj_scaling_factor = model.sense == MOI.MIN_SENSE ? 1.0 : -1.0
+
     # Objective callback
     # TODO(odow): FEASIBILITY_SENSE could produce confusing solver output if a
     # nonzero objective is set.
@@ -1558,7 +1560,7 @@ function MOI.optimize!(model::Optimizer)
         if model.sense == MOI.FEASIBILITY_SENSE
             return 0.0
         end
-        return eval_objective(model, x)
+        return obj_scaling_factor * eval_objective(model, x)
     end
 
     # Objective gradient callback
@@ -1567,6 +1569,7 @@ function MOI.optimize!(model::Optimizer)
             grad_f .= zero(eltype(grad_f))
         else
             eval_objective_gradient(model, grad_f, x)
+            grad_f *= obj_scaling_factor
         end
         return
     end
@@ -1596,7 +1599,7 @@ function MOI.optimize!(model::Optimizer)
                     cols[i] = hessian_sparsity[i][2]
                 end
             else
-                eval_hessian_lagrangian(model, values, x, obj_factor, lambda)
+                eval_hessian_lagrangian(model, values, x, obj_factor * obj_scaling_factor, lambda)
             end
             return
         end
@@ -1767,7 +1770,8 @@ end
 
 function MOI.get(model::Optimizer, attr::MOI.ObjectiveValue)
     MOI.check_result_index_bounds(model, attr)
-    return model.inner.f
+    obj_scaling_factor = model.sense == MOI.MIN_SENSE ? 1.0 : -1.0
+    return model.inner.f * obj_scaling_factor
 end
 
 """
@@ -1876,8 +1880,9 @@ macro define_constraint_dual(function_type, set_type, prefix)
             if !(1 <= ci.value <= length(model.$(constraint_array)))
                 error("Invalid constraint index ", ci.value)
             end
-            s = -_dual_multiplier(model)
-            return s * model.inner.mult_g[ci.value+$offset_function(model)]
+            # s = -_dual_multiplier(model)
+            # return s * model.inner.mult_g[ci.value+$offset_function(model)]
+            return model.inner.mult_g[ci.value+$offset_function(model)]
         end
     end
 end
@@ -1953,6 +1958,7 @@ end
 
 function MOI.get(model::Optimizer, attr::MOI.NLPBlockDual)
     MOI.check_result_index_bounds(model, attr)
-    s = -_dual_multiplier(model)
-    return s .* model.inner.mult_g[(1+nlp_constraint_offset(model)):end]
+    # s = -_dual_multiplier(model)
+    # return s .* model.inner.mult_g[(1+nlp_constraint_offset(model)):end]
+    return model.inner.mult_g[(1+nlp_constraint_offset(model)):end]
 end
