@@ -206,18 +206,18 @@ end
 
 end  # module TestMOIWrapper
 
-# runtests(TestMOIWrapper)
-# TestMOIWrapper.test_solvername()
-# TestMOIWrapper.test_supports_default_copy_to()
+runtests(TestMOIWrapper)
+# TestMOIWrapper.test_solvername() # PASS
+# TestMOIWrapper.test_supports_default_copy_to() # PASS
 # TestMOIWrapper.test_unittest()
-# TestMOIWrapper.test_ConstraintDualStart()
+# TestMOIWrapper.test_ConstraintDualStart() # PASS
 # TestMOIWrapper.test_contlinear()
-TestMOIWrapper.test_qp()
+# TestMOIWrapper.test_qp()
 # TestMOIWrapper.test_qcp()
 # TestMOIWrapper.test_nlptest()
-# TestMOIWrapper.test_getters()
-# TestMOIWrapper.test_boundsettwice()
-# TestMOIWrapper.test_nametest()
-# TestMOIWrapper.test_validtest()
-# TestMOIWrapper.test_emptytest()
-# TestMOIWrapper.test_solve_time()
+# TestMOIWrapper.test_getters() # PASS
+# TestMOIWrapper.test_boundsettwice() # PASS
+# TestMOIWrapper.test_nametest() # PASS
+# TestMOIWrapper.test_validtest() # PASS
+# TestMOIWrapper.test_emptytest() # PASS
+# TestMOIWrapper.test_solve_time() # PASS
