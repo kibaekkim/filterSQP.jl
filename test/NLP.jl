@@ -45,6 +45,7 @@ function objfun(
     f::Ptr{Cdouble}, 
     user::Ptr{Cdouble}, 
     iuser::Ptr{Cint}, 
+    userdata::Ptr{Cvoid},
     errflag::Ptr{Cint}
 )
     n = unsafe_load(n_ptr)
@@ -65,6 +66,7 @@ function confun(
     la_ptr::Ptr{Cint}, 
     user::Ptr{Cdouble}, 
     iuser_ptr::Ptr{Cint}, 
+    userdata::Ptr{Cvoid},
     errflag::Ptr{Cint}
 )
     n = unsafe_load(n_ptr)
@@ -91,6 +93,7 @@ function gradient(
     maxa_ptr::Ptr{Cint}, 
     user_ptr::Ptr{Cdouble}, 
     iuser_ptr::Ptr{Cint}, 
+    userdata::Ptr{Cvoid},
     errflag::Ptr{Cint}
 )
     n = unsafe_load(n_ptr)
@@ -213,6 +216,7 @@ function hessian(
     lws_ptr::Ptr{Cint}, 
     user_ptr::Ptr{Cdouble}, 
     iuser_ptr::Ptr{Cint}, 
+    userdata::Ptr{Cvoid},
     l_hess::Ptr{Cint}, 
     li_hess::Ptr{Cint}, 
     errflag::Ptr{Cint}
@@ -273,187 +277,119 @@ function hessian(
     return
 end
 
-objfun_cb = @cfunction(
-    objfun,
-    Cvoid,
-    (Ptr{Cdouble}, Ptr{Cint}, Ptr{Cdouble}, Ptr{Cdouble}, Ptr{Cint}, Ptr{Cint})
-)
-confun_cb = @cfunction(
-    confun,
-    Cvoid,
-    (Ptr{Cdouble}, Ptr{Cint}, Ptr{Cint}, Ptr{Cdouble}, Ptr{Cdouble}, Ptr{Cint}, Ptr{Cdouble}, Ptr{Cint}, Ptr{Cint})
-)
-gradient_cb = @cfunction(
-    gradient,
-    Cvoid,
-    (Ptr{Cint}, Ptr{Cint}, Ptr{Cint}, Ptr{Cdouble}, Ptr{Cdouble}, Ptr{Cint}, Ptr{Cint}, Ptr{Cdouble}, Ptr{Cint}, Ptr{Cint})
-)
-hessian_cb = @cfunction(
-    hessian,
-    Cvoid,
-    (Ptr{Cdouble}, Ptr{Cint}, Ptr{Cint}, Ptr{Cint}, Ptr{Cdouble}, Ptr{Cdouble}, Ptr{Cint}, Ptr{Cdouble}, Ptr{Cint}, Ptr{Cint}, Ptr{Cint}, Ptr{Cint})
-)
+function solve_test()
+    objfun_cb = @cfunction(
+        objfun,
+        Cvoid,
+        (Ptr{Cdouble}, Ptr{Cint}, Ptr{Cdouble}, Ptr{Cdouble}, Ptr{Cint}, Ptr{Cvoid}, Ptr{Cint})
+    )
+    confun_cb = @cfunction(
+        confun,
+        Cvoid,
+        (Ptr{Cdouble}, Ptr{Cint}, Ptr{Cint}, Ptr{Cdouble}, Ptr{Cdouble}, Ptr{Cint}, Ptr{Cdouble}, Ptr{Cint}, Ptr{Cvoid}, Ptr{Cint})
+    )
+    gradient_cb = @cfunction(
+        gradient,
+        Cvoid,
+        (Ptr{Cint}, Ptr{Cint}, Ptr{Cint}, Ptr{Cdouble}, Ptr{Cdouble}, Ptr{Cint}, Ptr{Cint}, Ptr{Cdouble}, Ptr{Cint}, Ptr{Cvoid}, Ptr{Cint})
+    )
+    hessian_cb = @cfunction(
+        hessian,
+        Cvoid,
+        (Ptr{Cdouble}, Ptr{Cint}, Ptr{Cint}, Ptr{Cint}, Ptr{Cdouble}, Ptr{Cdouble}, Ptr{Cint}, Ptr{Cdouble}, Ptr{Cint}, Ptr{Cvoid}, Ptr{Cint}, Ptr{Cint}, Ptr{Cint})
+    )
+    
+    objval = Ref{Cdouble}(prob.f)
+    ifail = Ref{Int32}(0)
+    
+    ccall(
+        (:filterSQP, libfilter),
+        Cvoid,
+        (
+            Cint, # n
+            Cint, # m
+            Cint, # kmax
+            Cint, # maxa
+            Cint, # maxf
+            Cint, # mlp
+            Cint, # mxwk
+            Cint, # mxiwk
+            Cint, # iprint
+            Cint, # nout
+            Ptr{Cint}, # ifail
+            Cdouble, # rho
+            Ptr{Cdouble}, # x
+            Ptr{Cdouble}, # c
+            Ptr{Cdouble}, # f
+            Cdouble, # fmin
+            Ptr{Cdouble}, # bl
+            Ptr{Cdouble}, # bu
+            Ptr{Cdouble}, # s
+            Ptr{Cdouble}, # a
+            Ptr{Cint}, # la
+            Ptr{Cdouble}, # ws
+            Ptr{Cint}, # lws
+            Ptr{Cdouble}, # lam
+            Ptr{UInt8}, # cstype
+            Ptr{Cdouble}, # user
+            Ptr{Cint}, # iuser
+            Any, # userdata
+            Cint, # maxiter
+            Ptr{Cint}, # istat
+            Ptr{Cdouble}, # rstat
+            Ptr{Cvoid}, # objfun
+            Ptr{Cvoid}, # confun
+            Ptr{Cvoid}, # gradient
+            Ptr{Cvoid}, # hessian
+        ),
+        prob.n,
+        prob.m,
+        prob.par.kmax,
+        prob.maxa,
+        prob.par.maxf,
+        prob.par.mlp,
+        prob.par.mxwk,
+        prob.par.mxiwk,
+        prob.par.iprint,
+        prob.par.nout,
+        ifail,
+        prob.par.rho,
+        prob.x,
+        prob.c,
+        objval,
+        prob.fmin,
+        prob.blo,
+        prob.bup,
+        prob.s,
+        prob.a,
+        prob.la,
+        prob.ws,
+        prob.lws,
+        prob.lam,
+        prob.cstype,
+        [],
+        [4], # iuser
+        prob,
+        prob.par.max_iter,
+        prob.istat,
+        prob.rstat,
+        objfun_cb,
+        confun_cb,
+        gradient_cb,
+        hessian_cb,
+    )
+    
+    prob.ifail = ifail[]
+    prob.status = ifail[]
+    prob.f = objval[]
+    
+    @show prob.f, prob.x
+    @test prob.ifail == 0
+    @test isapprox(prob.f, 0.759; atol = 1e-3)
+    @test isapprox(prob.x, [1.147,0.547,1.000,0.273, 0.300, 0.000]; atol = 1e-3)
+end
 
-objval = Ref{Cdouble}(prob.f)
-ifail = Ref{Int32}(0)
-
-ccall(
-    (:filterSQP, libfilter),
-    Cvoid,
-    (
-        Cint, # n
-        Cint, # m
-        Cint, # kmax
-        Cint, # maxa
-        Cint, # maxf
-        Cint, # mlp
-        Cint, # mxwk
-        Cint, # mxiwk
-        Cint, # iprint
-        Cint, # nout
-        Ptr{Cint}, # ifail
-        Cdouble, # rho
-        Ptr{Cdouble}, # x
-        Ptr{Cdouble}, # c
-        Ptr{Cdouble}, # f
-        Cdouble, # fmin
-        Ptr{Cdouble}, # bl
-        Ptr{Cdouble}, # bu
-        Ptr{Cdouble}, # s
-        Ptr{Cdouble}, # a
-        Ptr{Cint}, # la
-        Ptr{Cdouble}, # ws
-        Ptr{Cint}, # lws
-        Ptr{Cdouble}, # lam
-        Ptr{UInt8}, # cstype
-        Any, # user
-        Ptr{Cint}, # iuser
-        Cint, # maxiter
-        Ptr{Cint}, # istat
-        Ptr{Cdouble}, # rstat
-        Ptr{Cvoid}, # objfun
-        Ptr{Cvoid}, # confun
-        Ptr{Cvoid}, # gradient
-        Ptr{Cvoid}, # hessian
-    ),
-    prob.n,
-    prob.m,
-    prob.par.kmax,
-    prob.maxa,
-    prob.par.maxf,
-    prob.par.mlp,
-    prob.par.mxwk,
-    prob.par.mxiwk,
-    prob.par.iprint,
-    prob.par.nout,
-    ifail,
-    prob.par.rho,
-    prob.x,
-    prob.c,
-    objval,
-    prob.fmin,
-    prob.blo,
-    prob.bup,
-    prob.s,
-    prob.a,
-    prob.la,
-    prob.ws,
-    prob.lws,
-    prob.lam,
-    prob.cstype,
-    [],
-    [4], # iuser
-    prob.par.max_iter,
-    prob.istat,
-    prob.rstat,
-    objfun_cb,
-    confun_cb,
-    gradient_cb,
-    hessian_cb,
-)
-
-# ccall(
-#     (:filterSQP, libfilter),
-#     Cvoid,
-#     (
-#         Cint, # n
-#         Cint, # m
-#         Cint, # kmax
-#         Cint, # maxa
-#         Cint, # maxf
-#         Cint, # mlp
-#         Cint, # mxwk
-#         Cint, # mxiwk
-#         Cint, # iprint
-#         Cint, # nout
-#         Ptr{Cint}, # ifail
-#         Cdouble, # rho
-#         Ptr{Cdouble}, # x
-#         Ptr{Cdouble}, # c
-#         Ptr{Cdouble}, # f
-#         Cdouble, # fmin
-#         Ptr{Cdouble}, # bl
-#         Ptr{Cdouble}, # bu
-#         Ptr{Cdouble}, # s
-#         Ptr{Cdouble}, # a
-#         Ptr{Cint}, # la
-#         Ptr{Cdouble}, # ws
-#         Ptr{Cint}, # lws
-#         Ptr{Cdouble}, # lam
-#         Ptr{UInt8}, # cstype
-#         Any, # user
-#         Ptr{Cint}, # iuser
-#         Cint, # maxiter
-#         Ptr{Cint}, # istat
-#         Ptr{Cdouble}, # rstat
-#         Ptr{Cvoid}, # objfun
-#         Ptr{Cvoid}, # confun
-#         Ptr{Cvoid}, # gradient
-#         Ptr{Cvoid}, # hessian
-#     ),
-#     prob.n,
-#     prob.m,
-#     prob.kmax,
-#     prob.maxa,
-#     prob.maxf,
-#     prob.mlp,
-#     prob.mxwk,
-#     prob.mxiwk,
-#     prob.iprint,
-#     prob.nout,
-#     ifail,
-#     prob.rho,
-#     prob.x,
-#     prob.c,
-#     objval,
-#     prob.fmin,
-#     prob.bl,
-#     prob.bu,
-#     prob.s,
-#     prob.a,
-#     prob.la,
-#     prob.ws,
-#     prob.lws,
-#     prob.lam,
-#     prob.cstype,
-#     [],
-#     [4], # iuser
-#     prob.maxiter,
-#     prob.istat,
-#     prob.rstat,
-#     objfun_cb,
-#     confun_cb,
-#     gradient_cb,
-#     hessian_cb,
-# )
-
-prob.ifail = ifail[]
-prob.status = ifail[]
-prob.f = objval[]
-
-@test prob.ifail == 0
-@test isapprox(prob.f, 0.759; atol = 1e-3)
-@test isapprox(prob.x, [1.147,0.547,1.000,0.273, 0.300, 0.000]; atol = 1e-3)
+solve_test()
 
 end
 
