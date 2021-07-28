@@ -8,6 +8,7 @@ function test_nlp1()
     u = [2.0, 2.0, 1.0]
     m = Model(filterSQP.Optimizer)
     set_optimizer_attribute(m, "iprint", 0)
+    set_optimizer_attribute(m, "use_warm_start", true)
 
     @variable(m, 0 <= x[i=1:3] <= u[i])
     @variable(m, 0 <= y[i=1:3] <= 1)
