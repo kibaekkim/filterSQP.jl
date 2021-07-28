@@ -38,6 +38,7 @@ prob.la[28] = 14
 prob.la[29] = 16
 prob.la[30] = 19
 prob.la[31] = 23
+prob.par.iprint = 0
 
 function objfun(
     x_ptr::Ptr{Cdouble}, 
@@ -282,7 +283,7 @@ function solve_test()
         prob.status = -999
         return prob.status
     end
-    
+
     objfun_cb = @cfunction(
         objfun,
         Cvoid,
@@ -305,6 +306,7 @@ function solve_test()
     )
     
     objval = Ref{Cdouble}(prob.f)
+    prob.par.iprint = 0
     
     ccall(
         (:filterSQP, libfilter),
@@ -386,7 +388,7 @@ function solve_test()
     prob.status = prob.ifail[1]
     prob.f = objval[]
     
-    @show prob.f, prob.x
+    # @show prob.f, prob.x
     @test prob.status == 0
     @test isapprox(prob.f, 0.759; atol = 1e-3)
     @test isapprox(prob.x, [1.147,0.547,1.000,0.273, 0.300, 0.000]; atol = 1e-3)
