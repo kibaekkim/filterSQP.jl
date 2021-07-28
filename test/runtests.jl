@@ -16,6 +16,10 @@ end
     include("NLP.jl")
 end
 
+@testset "JuMPExample" begin
+    include("JuMP.jl")
+end
+
 @testset "MathOptInterface" begin
     include("MOI_wrapper.jl")
 end

@@ -1615,64 +1615,83 @@ function MOI.optimize!(model::Optimizer)
 
     start_time = time()
 
-    model.inner = createProblem(
+    # warm start?
+    warm_start = can_warm_start(
+        model.inner,
         num_variables,
-        x_l,
-        x_u,
         num_constraints,
-        constraint_lb,
-        constraint_ub,
         cstype,
-        length(jacobian_sparsity),
-        length(hessian_sparsity),
-        eval_f_cb,
-        eval_g_cb,
-        eval_grad_f_cb,
-        eval_jac_g_cb,
-        eval_h_cb,
+        jacobian_sparsity,
+        hessian_sparsity
     )
 
-    # If nothing is provided, the default starting value is 0.0.
-    model.inner.x = zeros(num_variables)
-    for (i, v) in enumerate(model.variable_info)
-        if v.start !== nothing
-            model.inner.x[i] = v.start
-        elseif v.has_lower_bound && v.has_upper_bound
-            if 0.0 <= v.lower_bound
-                model.inner.x[i] = v.lower_bound
-            elseif v.upper_bound <= 0.0
-                model.inner.x[i] = v.upper_bound
+    if warm_start
+        modifyProblem!(
+            model.inner,
+            x_l,
+            x_u,
+            constraint_lb,
+            constraint_ub,)
+    else
+        model.inner = createProblem(
+            num_variables,
+            x_l,
+            x_u,
+            num_constraints,
+            constraint_lb,
+            constraint_ub,
+            cstype,
+            length(jacobian_sparsity),
+            length(hessian_sparsity),
+            eval_f_cb,
+            eval_g_cb,
+            eval_grad_f_cb,
+            eval_jac_g_cb,
+            eval_h_cb,
+        )
+
+        # If nothing is provided, the default starting value is 0.0.
+        model.inner.x = zeros(num_variables)
+        for (i, v) in enumerate(model.variable_info)
+            if v.start !== nothing
+                model.inner.x[i] = v.start
+            elseif v.has_lower_bound && v.has_upper_bound
+                if 0.0 <= v.lower_bound
+                    model.inner.x[i] = v.lower_bound
+                elseif v.upper_bound <= 0.0
+                    model.inner.x[i] = v.upper_bound
+                end
+            elseif v.has_lower_bound
+                model.inner.x[i] = max(0.0, v.lower_bound)
+            else
+                model.inner.x[i] = min(0.0, v.upper_bound)
             end
-        elseif v.has_lower_bound
-            model.inner.x[i] = max(0.0, v.lower_bound)
-        else
-            model.inner.x[i] = min(0.0, v.upper_bound)
         end
-    end
-
-    if model.nlp_dual_start === nothing
-        model.nlp_dual_start = zeros(Float64, num_nlp_constraints)
-    end
-
-    mult_g_start = [
-        [info.dual_start for info in model.linear_le_constraints]
-        [info.dual_start for info in model.linear_ge_constraints]
-        [info.dual_start for info in model.linear_eq_constraints]
-        [info.dual_start for info in model.quadratic_le_constraints]
-        [info.dual_start for info in model.quadratic_ge_constraints]
-        [info.dual_start for info in model.quadratic_eq_constraints]
-        model.nlp_dual_start
-    ]
-
-    model.inner.mult_g =
-        [_dual_start(model, start, -1) for start in mult_g_start]
-
-    model.inner.mult_x_L = zeros(length(model.variable_info))
-    model.inner.mult_x_U = zeros(length(model.variable_info))
-    for (i, v) in enumerate(model.variable_info)
-        model.inner.mult_x_L[i] = _dual_start(model, v.lower_bound_dual_start)
-        model.inner.mult_x_U[i] =
-            _dual_start(model, v.upper_bound_dual_start, -1)
+    
+        if model.nlp_dual_start === nothing
+            model.nlp_dual_start = zeros(Float64, num_nlp_constraints)
+        end
+    
+        mult_g_start = [
+            [info.dual_start for info in model.linear_le_constraints]
+            [info.dual_start for info in model.linear_ge_constraints]
+            [info.dual_start for info in model.linear_eq_constraints]
+            [info.dual_start for info in model.quadratic_le_constraints]
+            [info.dual_start for info in model.quadratic_ge_constraints]
+            [info.dual_start for info in model.quadratic_eq_constraints]
+            model.nlp_dual_start
+        ]
+    
+        model.inner.mult_g =
+            [_dual_start(model, start, -1) for start in mult_g_start]
+    
+        model.inner.mult_x_L = zeros(length(model.variable_info))
+        model.inner.mult_x_U = zeros(length(model.variable_info))
+        for (i, v) in enumerate(model.variable_info)
+            model.inner.mult_x_L[i] = _dual_start(model, v.lower_bound_dual_start)
+            model.inner.mult_x_U[i] =
+                _dual_start(model, v.upper_bound_dual_start, -1)
+        end
     end
 
     if model.silent

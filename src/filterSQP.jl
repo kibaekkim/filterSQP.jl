@@ -387,10 +387,6 @@ function createProblem(
     eval_jac_g,
     eval_h=nothing,
 )
-    # @show n, m
-    # @show cstype
-    # @show nele_jac, nele_hess
-
     return FilterSqpProblem(
         n,
         m,
@@ -405,6 +401,63 @@ function createProblem(
         eval_jac_g,
         eval_h,
     )
+end
+
+function can_warm_start(
+    prob::Union{FilterSqpProblem,Nothing},
+    n::Int,
+    m::Int,
+    cstype::String,
+    jacobian_sparsity,
+    hessian_sparsity)
+
+    if isnothing(prob)
+        return false 
+    end
+    if prob.par.use_warm_start == false
+        return false
+    end
+    if prob.n != n || prob.m != m || prob.cstype != cstype
+        return false
+    end
+    if prob.nele_jac == length(jacobian_sparsity)
+        # @show prob.rows_jac
+        # @show prob.cols_jac
+        # @show jacobian_sparsity
+        for i in 1:length(jacobian_sparsity)
+            if prob.rows_jac[i] != jacobian_sparsity[i][1] ||
+                prob.cols_jac[i] != jacobian_sparsity[i][2]
+                return false
+            end
+        end
+    else
+        return false
+    end
+    if prob.nele_hess == length(hessian_sparsity)
+        # @show prob.rows_hess
+        # @show prob.cols_hess
+        # @show hessian_sparsity
+        for i in 1:length(hessian_sparsity)
+            if prob.rows_hess[i] != hessian_sparsity[i][1] ||
+                prob.cols_hess[i] != hessian_sparsity[i][2]
+                return false
+            end
+        end
+    else
+        return false
+    end
+    return true
+end
+
+function modifyProblem!(
+    prob::FilterSqpProblem,
+    x_L::Vector{Float64},
+    x_U::Vector{Float64},
+    g_L::Vector{Float64},
+    g_U::Vector{Float64})
+    prob.blo .= [x_L; g_L]
+    prob.bup .= [x_U; g_U]
+    prob.ifail[1] = -1
 end
 
 function addOption(prob::FilterSqpProblem, keyword::String, value)
@@ -467,6 +520,8 @@ function solveProblem(prob::FilterSqpProblem)
     # @show prob.lam
     # @show prob.blo
     # @show prob.bup
+    # @show prob.x
+    # @show prob.lam
 
     ccall(
         (:filterSQP, libfilter),
@@ -546,10 +601,10 @@ function solveProblem(prob::FilterSqpProblem)
     )
 
     prob.status = prob.ifail[1]
-    prob.ifail[1] = -1
     prob.f = objval[]
     # @show prob.status
     # @show prob.f
+    # @show prob.x
     # @show prob.lam
     lam2mult!(prob)
 
