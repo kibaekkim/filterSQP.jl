@@ -60,11 +60,13 @@ mutable struct FilterSqpProblem
     rows_jac::Vector{Int}
     cols_jac::Vector{Int}
     values_jac::Vector{Float64}
+    A::SparseMatrixCSC{Float64, Int64}
 
     nele_hess::Int
     rows_hess::Vector{Int}
     cols_hess::Vector{Int}
     values_hess::Vector{Float64}
+    H::SparseMatrixCSC{Float64, Int64}
 
     # Callbacks
     eval_f::Union{Function,Nothing}
@@ -127,10 +129,12 @@ mutable struct FilterSqpProblem
             zeros(Int, nele_jac),
             zeros(Int, nele_jac),
             zeros(Float64, nele_jac),
+            sparse(1:n, ones(n), zeros(n), n, m+1),
             nele_hess,
             zeros(Int, nele_hess),
             zeros(Int, nele_hess),
             zeros(Float64, nele_hess),
+            spzeros(n, n),
             eval_f,
             eval_g,
             eval_grad_f,
@@ -138,6 +142,7 @@ mutable struct FilterSqpProblem
             eval_h,
             par,
         )
+        
         return prob
     end
 end
@@ -247,25 +252,27 @@ function gradient_wrapper(
     # @show prob.rows_jac 
     # @show prob.cols_jac 
     # @show prob.values_jac 
-    A = sparse(
-        [prob.cols_jac; 1:n], 
-        [prob.rows_jac .+ 1; ones(n)], 
-        [prob.values_jac; prob.grad_f], 
-        n, m+1)
+    fill!(prob.A.nzval, 0.0)
+    for i = 1:n
+        prob.A[i,1] = prob.grad_f[i]
+    end
+    for i = 1:prob.nele_jac
+        prob.A[prob.cols_jac[i], 1+prob.rows_jac[i]] += prob.values_jac[i]
+    end
     # dropzeros!(A)
     # @show x
-    # @show A
+    # @show prob.A
     
-    nnza = length(A.nzval)
+    nnza = length(prob.A.nzval)
     pjp = nnza + 1
     la[1] = pjp
 
     for i = 1:nnza
-        a[i] = A.nzval[i]
-        la[i+1] = A.rowval[i]
+        a[i] = prob.A.nzval[i]
+        la[i+1] = prob.A.rowval[i]
     end
-    for i = 1:(A.n+1)
-        la[pjp+i] = A.colptr[i]
+    for i = 1:(prob.A.n+1)
+        la[pjp+i] = prob.A.colptr[i]
     end
     # @show a
     # @show la
@@ -317,28 +324,24 @@ function hessian_wrapper(
         prob.eval_h(x, :Structure, prob.rows_hess, prob.cols_hess, obj_factor, lam, prob.values_hess) # FIXME: why should I get this info again?
         prob.eval_h(x, :Values, prob.rows_hess, prob.cols_hess, obj_factor, lam, prob.values_hess)
 
-        H = sparse(prob.rows_hess, prob.cols_hess, prob.values_hess, n, n)
-        for j = 1:n, i = (H.colptr[j]):(H.colptr[j+1]-1)
-            if j < H.rowval[i]
-                H.nzval[i] = 0.0
-            end
-        end
-        dropzeros!(H)
-        nnzH = length(H.nzval)
-        # @show H
         # @show prob.rows_hess
         # @show prob.cols_hess
         # @show prob.values_hess
+        fill!(prob.H.nzval, 0.0)
+        for i = 1:prob.nele_hess
+            if prob.rows_hess[i] <= prob.cols_hess[i] && !iszero(prob.values_hess[i])
+                prob.H[prob.rows_hess[i], prob.cols_hess[i]] += prob.values_hess[i]
+            end
+        end
+        nnzH = length(prob.H.nzval)
+        # @show prob.H
 
         # store indices and values of Hessian
         if nnzH > 0
-            for j = 1:n, i = (H.colptr[j]):(H.colptr[j+1]-1)
-                if j < H.rowval[i]
-                    break
-                end
-                lws[i] = H.rowval[i]
+            for j = 1:n, i = (prob.H.colptr[j]):(prob.H.colptr[j+1]-1)
+                lws[i] = prob.H.rowval[i]
                 lws[nnzH+i] = j
-                ws[i] = H.nzval[i]
+                ws[i] = prob.H.nzval[i]
             end
         end
     end
