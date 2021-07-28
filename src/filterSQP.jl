@@ -7,7 +7,17 @@ using SparseArrays
 
 export libfilter
 
-libfilter = "/Users/kibaekkim/Documents/REPOS/filterSQP/build/lib/libfilter.dylib"
+function __init__()
+    try
+        global libfilter = Libdl.find_library("libfilter")
+        if libfilter == ""
+            @warn("Could not load filterSQP shared library. Make sure it is in your library path.")
+        end
+    catch
+        @warn("Failed to initialize the package.")
+        rethrow()
+    end
+end
 
 export createProblem,
     solveProblem,
@@ -377,9 +387,6 @@ function createProblem(
     eval_jac_g,
     eval_h=nothing,
 )
-    @assert n == length(x_L) == length(x_U)
-    @assert m == length(g_L) == length(g_U)
-
     # @show n, m
     # @show cstype
     # @show nele_jac, nele_hess
@@ -427,6 +434,11 @@ function mult2lam!(prob::FilterSqpProblem)
 end
 
 function solveProblem(prob::FilterSqpProblem)
+
+    if libfilter == ""
+        prob.status = -999
+        return prob.status
+    end
 
     objfun_cb = @cfunction(
         objfun_wrapper,

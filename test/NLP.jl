@@ -277,6 +277,12 @@ function hessian(
 end
 
 function solve_test()
+
+    if libfilter == ""
+        prob.status = -999
+        return prob.status
+    end
+    
     objfun_cb = @cfunction(
         objfun,
         Cvoid,

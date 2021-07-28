@@ -1690,7 +1690,7 @@ function MOI.optimize!(model::Optimizer)
 end
 
 function MOI.get(model::Optimizer, ::MOI.TerminationStatus)
-    if model.inner === nothing
+    if model.inner === nothing || model.inner.status == -999
         return MOI.OPTIMIZE_NOT_CALLED
     end
     status = ApplicationReturnStatus[model.inner.status]
