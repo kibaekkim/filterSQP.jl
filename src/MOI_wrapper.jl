@@ -1569,7 +1569,7 @@ function MOI.optimize!(model::Optimizer)
             grad_f .= zero(eltype(grad_f))
         else
             eval_objective_gradient(model, grad_f, x)
-            grad_f *= obj_scaling_factor
+            grad_f .*= obj_scaling_factor
         end
         return
     end
@@ -1697,9 +1697,9 @@ function MOI.get(model::Optimizer, ::MOI.TerminationStatus)
     if status == :Optimal_solution_found
         return MOI.LOCALLY_SOLVED
     elseif status == :Infeasible_Linear_Constraints
-        return MOI.LOCALLY_INFEASIBLE
+        return MOI.INFEASIBLE
     elseif status == :Locally_Infeasible_Nonlinear_Constraints
-        return MOI.LOCALLY_INFEASIBLE
+        return MOI.INFEASIBLE
     elseif status == :QP_Infeasible
         return MOI.LOCALLY_INFEASIBLE
     elseif status == :SQP_Termination_by_eps
@@ -1725,7 +1725,11 @@ end
 
 # filterSQP always has an iterate available.
 function MOI.get(model::Optimizer, ::MOI.ResultCount)
-    return (model.inner !== nothing) ? 1 : 0
+    cnt = 1
+    if model.inner === nothing || MOI.get(model, MOI.TerminationStatus()) == MOI.INFEASIBLE
+        cnt = 0
+    end
+    return cnt
 end
 
 function MOI.get(model::Optimizer, attr::MOI.PrimalStatus)
@@ -1930,8 +1934,7 @@ function MOI.get(
 )
     MOI.check_result_index_bounds(model, attr)
     MOI.throw_if_not_valid(model, ci)
-    rc = model.inner.mult_x_L[ci.value] - model.inner.mult_x_U[ci.value]
-    return min(0.0, _dual_multiplier(model) * rc)
+    return min(0.0, model.inner.lam[ci.value])
 end
 
 function MOI.get(
@@ -1941,8 +1944,7 @@ function MOI.get(
 )
     MOI.check_result_index_bounds(model, attr)
     MOI.throw_if_not_valid(model, ci)
-    rc = model.inner.mult_x_L[ci.value] - model.inner.mult_x_U[ci.value]
-    return max(0.0, _dual_multiplier(model) * rc)
+    return max(0.0, model.inner.lam[ci.value])
 end
 
 function MOI.get(
@@ -1952,8 +1954,7 @@ function MOI.get(
 )
     MOI.check_result_index_bounds(model, attr)
     MOI.throw_if_not_valid(model, ci)
-    rc = model.inner.mult_x_L[ci.value] - model.inner.mult_x_U[ci.value]
-    return _dual_multiplier(model) * rc
+    return model.inner.lam[ci.value]
 end
 
 function MOI.get(model::Optimizer, attr::MOI.NLPBlockDual)

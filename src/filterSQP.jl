@@ -19,7 +19,7 @@ mutable struct FilterSqpProblem
     n::Int                      # number of variables
     m::Int                      # number of constraints (linear and nonlinear)
     maxa::Int                   # max. nmbrer of entries in a
-    ifail::Int                  # fail flag: -1 = ON ENTRY: warm start (use ONLY if n, m, k, lws unchanged from previous call)
+    ifail::Vector{Int32}        # fail flag: -1 = ON ENTRY: warm start (use ONLY if n, m, k, lws unchanged from previous call)
                                 #             0 = successful run
                                 #             1 = unbounded NLP detected (f < fmin)
                                 #             2 = linear constraints are infeasible
@@ -102,7 +102,7 @@ mutable struct FilterSqpProblem
             n,
             m,
             n + nele_jac,                   # maxa
-            0,                              # ifail
+            [0],                            # ifail
             zeros(Float64, n),              # x
             zeros(Float64, m),              # c
             0.0,                            # f
@@ -247,15 +247,13 @@ function gradient_wrapper(
     # @show prob.rows_jac 
     # @show prob.cols_jac 
     # @show prob.values_jac 
-
-    # @show prob.grad_f
-    # @show sparse(prob.rows_jac, prob.cols_jac, prob.values_jac, m, n)
     A = sparse(
         [prob.cols_jac; 1:n], 
         [prob.rows_jac .+ 1; ones(n)], 
         [prob.values_jac; prob.grad_f], 
         n, m+1)
     # dropzeros!(A)
+    # @show x
     # @show A
     
     nnza = length(A.nzval)
@@ -327,7 +325,7 @@ function hessian_wrapper(
         end
         dropzeros!(H)
         nnzH = length(H.nzval)
-        @show H
+        # @show H
         # @show prob.rows_hess
         # @show prob.cols_hess
         # @show prob.values_hess
@@ -403,7 +401,28 @@ function addOption(prob::FilterSqpProblem, keyword::String, value)
     setfield!(prob.par, Symbol(keyword), value)
     return
 end
-    
+
+function lam2mult!(prob::FilterSqpProblem)
+    for j = 1:prob.n
+        # @show prob.x[j], prob.blo[j], prob.bup[j], prob.lam[j]
+        prob.mult_x_L[j] = max(0.0, prob.lam[j])
+        prob.mult_x_U[j] = min(0.0, prob.lam[j])
+    end
+    for i = 1:prob.m
+        # @show prob.c[i], prob.blo[prob.n+i], prob.bup[prob.n+i], prob.lam[prob.n+i]
+        prob.mult_g[i] = prob.lam[prob.n+i]
+    end
+end
+
+function mult2lam!(prob::FilterSqpProblem)
+    for j = 1:prob.n
+        prob.lam[j] = prob.mult_x_L[j] + prob.mult_x_U[j]
+    end
+    for i = 1:prob.m
+        prob.lam[prob.n+i] = prob.mult_g[i]
+    end
+end
+
 function solveProblem(prob::FilterSqpProblem)
 
     objfun_cb = @cfunction(
@@ -428,7 +447,11 @@ function solveProblem(prob::FilterSqpProblem)
     )
 
     objval = Ref{Cdouble}(prob.f)
-    ifail = Ref{Int32}(0)
+
+    mult2lam!(prob)
+    # @show prob.lam
+    # @show prob.blo
+    # @show prob.bup
 
     ccall(
         (:filterSQP, libfilter),
@@ -480,7 +503,7 @@ function solveProblem(prob::FilterSqpProblem)
         prob.par.mxiwk,
         prob.par.iprint,
         prob.par.nout,
-        ifail,
+        prob.ifail,
         prob.par.rho,
         prob.x,
         prob.c,
@@ -507,22 +530,13 @@ function solveProblem(prob::FilterSqpProblem)
         hessian_cb,
     )
 
-    prob.ifail = ifail[]
-    prob.status = ifail[]
+    prob.status = prob.ifail[1]
+    prob.ifail[1] = -1
     prob.f = objval[]
-    @show prob.ifail
-    @show prob.status
-    @show prob.f
-
-    for j = 1:prob.n
-        @show prob.x[j], prob.blo[j], prob.bup[j], prob.lam[j]
-        prob.mult_x_L[j] = prob.lam[j]
-        prob.mult_x_U[j] = prob.lam[j]
-    end
-    for i = 1:prob.m
-        @show prob.blo[prob.n+i], prob.bup[prob.n+i], prob.lam[prob.n+i]
-        prob.mult_g[i] = prob.lam[prob.n+i]
-    end
+    # @show prob.status
+    # @show prob.f
+    # @show prob.lam
+    lam2mult!(prob)
 
     return prob.status
 end

@@ -12,9 +12,9 @@ function runtests(mod)
     end
 end
 
-# @testset "NlpExample" begin
-#     include("NLP.jl")
-# end
+@testset "NlpExample" begin
+    include("NLP.jl")
+end
 
 @testset "MathOptInterface" begin
     include("MOI_wrapper.jl")

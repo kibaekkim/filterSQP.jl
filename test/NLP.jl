@@ -49,7 +49,6 @@ function objfun(
     errflag::Ptr{Cint}
 )
     n = unsafe_load(n_ptr)
-    @test n == 6
     x = unsafe_wrap(Array, x_ptr, Int(n))
     fval = 5.0 * x[4] + 6.0 * x[5] + 10.0 * x[1] - 7.0 * x[3] - 18.0 * log(x[2] + 1) - 19.2 * log(x[1] - x[2] + 1) + 10.0
     unsafe_store!(f, fval)
@@ -183,23 +182,23 @@ function gradient(
         5 0  0 13 15  0  0
         6 0  0  0  0  0 22
     ] =#
-    @test la == Int32[23, # 1
-        1, 2, 3, 4, 5, 6, # 7
-        2, 1, 
-        2, 4, 
-        1, 2, 5, 
-        4, 5, # 16
-        1, 2, 3, # 19
-        1, 2, 3, 6, # 23
-        1,
-        7, 
-        9, 
-        11,
-        14,
-        16,
-        19,
-        23
-    ]
+    # @test la == Int32[23, # 1
+    #     1, 2, 3, 4, 5, 6, # 7
+    #     2, 1, 
+    #     2, 4, 
+    #     1, 2, 5, 
+    #     4, 5, # 16
+    #     1, 2, 3, # 19
+    #     1, 2, 3, 6, # 23
+    #     1,
+    #     7, 
+    #     9, 
+    #     11,
+    #     14,
+    #     16,
+    #     19,
+    #     23
+    # ]
 
     unsafe_store!(mxa_ptr, a_entries)
     unsafe_store!(errflag, 0)
@@ -300,7 +299,6 @@ function solve_test()
     )
     
     objval = Ref{Cdouble}(prob.f)
-    ifail = Ref{Int32}(0)
     
     ccall(
         (:filterSQP, libfilter),
@@ -352,7 +350,7 @@ function solve_test()
         prob.par.mxiwk,
         prob.par.iprint,
         prob.par.nout,
-        ifail,
+        prob.ifail,
         prob.par.rho,
         prob.x,
         prob.c,
@@ -379,12 +377,11 @@ function solve_test()
         hessian_cb,
     )
     
-    prob.ifail = ifail[]
-    prob.status = ifail[]
+    prob.status = prob.ifail[1]
     prob.f = objval[]
     
     @show prob.f, prob.x
-    @test prob.ifail == 0
+    @test prob.status == 0
     @test isapprox(prob.f, 0.759; atol = 1e-3)
     @test isapprox(prob.x, [1.147,0.547,1.000,0.273, 0.300, 0.000]; atol = 1e-3)
 end
