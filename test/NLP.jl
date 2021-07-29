@@ -323,6 +323,7 @@ function solve_test()
             Cint, # iprint
             Cint, # nout
             Ptr{Cint}, # ifail
+            Cdouble, # eps
             Cdouble, # rho
             Ptr{Cdouble}, # x
             Ptr{Cdouble}, # c
@@ -359,6 +360,7 @@ function solve_test()
         prob.par.iprint,
         prob.par.nout,
         prob.ifail,
+        prob.par.eps,
         prob.par.rho,
         prob.x,
         prob.c,
