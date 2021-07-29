@@ -7,7 +7,7 @@ using Test
 function test_nlp1()
     u = [2.0, 2.0, 1.0]
     m = Model(filterSQP.Optimizer)
-    set_optimizer_attribute(m, "iprint", 0)
+    set_optimizer_attribute(m, "iprint", 1)
     set_optimizer_attribute(m, "use_warm_start", true)
 
     @variable(m, 0 <= x[i=1:3] <= u[i])
@@ -45,6 +45,30 @@ function test_nlp1()
     # optimize!(m)
 end
 
+function test_hs071()
+    m = Model(filterSQP.Optimizer)
+    set_optimizer_attribute(m, "iprint", 1)
+    set_optimizer_attribute(m, "use_warm_start", true)
+    # set_optimizer_attribute(m, "max_iter", 100)
+
+    x0 = [1.,5.,5.,1.]
+    @variable(m, 1 <= x[i=1:4] <= 5, start = x0[i])
+    @NLobjective(m, Min, x[1]*x[4]*(x[1]+x[2]+x[3]))
+    @NLconstraint(m, x[1]*x[2]*x[3]*x[4] >= 25)
+    @constraint(m, sum(x[i]^2 for i=1:4) == 40)
+    
+    optimize!(m)
+    
+    @test isapprox(objective_value(m), 12.938954920792929; atol = 1e-3)
+    @test isapprox(value.(x), [1.0, 4.312350058944301, 4.312350058944198, 1.344348890075499]; atol = 1e-3)
+    
+    optimize!(m)
+    
+    @test isapprox(objective_value(m), 12.938954920792929; atol = 1e-3)
+    @test isapprox(value.(x), [1.0, 4.312350058944301, 4.312350058944198, 1.344348890075499]; atol = 1e-3)
+end
+
 end
 
 runtests(TestJuMPExample)
+# TestJuMPExample.test_hs071()
