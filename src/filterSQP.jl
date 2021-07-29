@@ -330,8 +330,9 @@ function hessian_wrapper(
 
     if prob.nele_hess > 0
         obj_factor = ifelse(phase == 2, 1.0, 0.0)
-        prob.eval_h(x, :Structure, prob.rows_hess, prob.cols_hess, obj_factor, lam, prob.values_hess) # FIXME: why should I get this info again?
-        prob.eval_h(x, :Values, prob.rows_hess, prob.cols_hess, obj_factor, lam, prob.values_hess)
+        lambda = view(lam, collect(1:m).+n)
+        prob.eval_h(x, :Structure, prob.rows_hess, prob.cols_hess, obj_factor, lambda, prob.values_hess) # FIXME: why should I get this info again?
+        prob.eval_h(x, :Values, prob.rows_hess, prob.cols_hess, obj_factor, lambda, prob.values_hess)
 
         # @show sparse(prob.rows_hess, prob.cols_hess, prob.values_hess, n, n)
         # @show prob.rows_hess

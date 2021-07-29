@@ -1448,7 +1448,7 @@ function eval_hessian_lagrangian(
         offset += fill_hessian_lagrangian!(
             values,
             offset,
-            lambda[i+quadratic_le_offset(model)],
+            -lambda[i+quadratic_le_offset(model)],
             info.func,
         )
     end
@@ -1456,7 +1456,7 @@ function eval_hessian_lagrangian(
         offset += fill_hessian_lagrangian!(
             values,
             offset,
-            lambda[i+quadratic_ge_offset(model)],
+            -lambda[i+quadratic_ge_offset(model)],
             info.func,
         )
     end
@@ -1464,7 +1464,7 @@ function eval_hessian_lagrangian(
         offset += fill_hessian_lagrangian!(
             values,
             offset,
-            lambda[i+quadratic_eq_offset(model)],
+            -lambda[i+quadratic_eq_offset(model)],
             info.func,
         )
     end
@@ -1475,7 +1475,7 @@ function eval_hessian_lagrangian(
         nlp_values,
         x,
         obj_factor,
-        nlp_lambda,
+        -nlp_lambda,
     )
     return
 end
