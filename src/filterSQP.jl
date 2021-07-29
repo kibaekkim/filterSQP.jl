@@ -548,6 +548,7 @@ function solveProblem(prob::FilterSqpProblem)
             Cint, # iprint
             Cint, # nout
             Ptr{Cint}, # ifail
+            Cdouble, # eps
             Cdouble, # rho
             Ptr{Cdouble}, # x
             Ptr{Cdouble}, # c
@@ -584,6 +585,7 @@ function solveProblem(prob::FilterSqpProblem)
         prob.par.iprint,
         prob.par.nout,
         prob.ifail,
+        prob.par.eps,
         prob.par.rho,
         prob.x,
         prob.c,

@@ -1,4 +1,5 @@
 Base.@kwdef mutable struct Parameters
+    eps::Float64 = 1.e-6            # a tolerance ϵ
     kmax::Int = 500                 # max. allowable dimension of null space
     maxf::Int = 100                 # max. length of filter
     mlp::Int = 1000                 # max. level for resolving degeneracy in QP
