@@ -1720,7 +1720,7 @@ function MOI.get(model::Optimizer, ::MOI.TerminationStatus)
     elseif status == :Locally_Infeasible_Nonlinear_Constraints
         return MOI.INFEASIBLE
     elseif status == :QP_Infeasible
-        return MOI.LOCALLY_INFEASIBLE
+        return MOI.LOCALLY_SOLVED
     elseif status == :SQP_Termination_by_eps
         return MOI.ALMOST_LOCALLY_SOLVED
     elseif status == :SQP_Termination_by_maxiter
