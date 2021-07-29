@@ -308,7 +308,6 @@ function hessian_wrapper(
     li_hess::Ptr{Cint}, # On entry: max. space allowed for Hessian storage in lws. On exit: actual amount of Hessian storage used in lws
     errflag::Ptr{Cint}
 )
-
     # println(">>>> hessian_wrapper ")
     unsafe_store!(errflag, 1)
     prob = unsafe_pointer_to_objref(userdata)::FilterSqpProblem
@@ -334,13 +333,19 @@ function hessian_wrapper(
         prob.eval_h(x, :Structure, prob.rows_hess, prob.cols_hess, obj_factor, lam, prob.values_hess) # FIXME: why should I get this info again?
         prob.eval_h(x, :Values, prob.rows_hess, prob.cols_hess, obj_factor, lam, prob.values_hess)
 
+        # @show sparse(prob.rows_hess, prob.cols_hess, prob.values_hess, n, n)
         # @show prob.rows_hess
         # @show prob.cols_hess
         # @show prob.values_hess
         fill!(prob.H.nzval, 0.0)
         for i = 1:prob.nele_hess
-            if prob.rows_hess[i] <= prob.cols_hess[i] && !iszero(prob.values_hess[i])
+            if iszero(prob.values_hess[i])
+                continue
+            end
+            if prob.rows_hess[i] <= prob.cols_hess[i]
                 prob.H[prob.rows_hess[i], prob.cols_hess[i]] += prob.values_hess[i]
+            else
+                prob.H[prob.cols_hess[i], prob.rows_hess[i]] += prob.values_hess[i]
             end
         end
         nnzH = length(prob.H.nzval)
@@ -348,20 +353,24 @@ function hessian_wrapper(
 
         # store indices and values of Hessian
         if nnzH > 0
-            for j = 1:n, i = (prob.H.colptr[j]):(prob.H.colptr[j+1]-1)
-                lws[i] = prob.H.rowval[i]
-                lws[nnzH+i] = j
+            for i = 1:nnzH
+                lws[1+i] = prob.H.rowval[i]
                 ws[i] = prob.H.nzval[i]
+            end
+            for j = 1:(n+1)
+                lws[1+nnzH+j] = prob.H.colptr[j]
             end
         end
     end
 
     # save number of Hessian entries
-    lws[1] = nnzH
+    lws[1] = nnzH + 1
+    # @show ws[1:nnzH]
+    # @show lws[1:(nnzH+n+2)]
 
     # set storage requirements for Hessian
-    unsafe_store!(l_hess, lws[1])
-    unsafe_store!(li_hess, 1 + 2 * lws[1])
+    unsafe_store!(l_hess, nnzH)
+    unsafe_store!(li_hess, nnzH+n+3)
     unsafe_store!(errflag, 0)
     # println("<<<< hessian_wrapper ")
     return
