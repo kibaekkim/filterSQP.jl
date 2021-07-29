@@ -527,7 +527,6 @@ function solveProblem(prob::FilterSqpProblem)
     objval = Ref{Cdouble}(prob.f)
 
     mult2lam!(prob)
-    # @show prob.lam
     # @show prob.blo
     # @show prob.bup
     # @show prob.x
